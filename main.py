@@ -14,6 +14,13 @@ import os
 import sys
 from pathlib import Path
 
+# .env ファイルを自動読み込み
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from resume_parser import build_profile
 from keyword_extractor import extract_keywords_with_ai
 from green_scraper import scrape_green

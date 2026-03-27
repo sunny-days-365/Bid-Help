@@ -13,6 +13,13 @@ import json
 import webbrowser
 from pathlib import Path
 
+# .env ファイルを自動読み込み
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # ── Colour palette ────────────────────────────────────────────────────────────
 BG        = "#0f1117"       # page background
 SURFACE   = "#1a1d27"       # card / panel
