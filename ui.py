@@ -13,6 +13,9 @@ import json
 import webbrowser
 from pathlib import Path
 
+# 設定ファイルのパス（API キーは保存しない）
+CONFIG_PATH = Path(__file__).parent / "config.json"
+
 # .env ファイルを自動読み込み
 try:
     from dotenv import load_dotenv
@@ -40,6 +43,7 @@ class GreenJobFinderApp(tk.Tk):
         self.geometry("1000x760")
         self.minsize(820, 600)
         self.configure(bg=BG)
+        self.state("zoomed")  # 起動時に最大化
 
         # ── State ─────────────────────────────────────────────────────────────
         self.resume_path   = tk.StringVar()
@@ -54,6 +58,9 @@ class GreenJobFinderApp(tk.Tk):
 
         self._build_styles()
         self._build_layout()
+        self._load_config()   # 前回の入力値を復元
+        # ウィンドウを閉じるときに自動保存
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ── Styles ────────────────────────────────────────────────────────────────
     def _build_styles(self):
@@ -477,6 +484,8 @@ class GreenJobFinderApp(tk.Tk):
         if not self._validate():
             return
 
+        self._save_config()   # 検索前に入力値を保存
+
         self._stop_flag = False
         self.run_btn.config(state="disabled", bg=BORDER, fg=SUBTEXT)
         self.stop_btn.config(state="normal")
@@ -670,6 +679,90 @@ class GreenJobFinderApp(tk.Tk):
         for widget in [card, title_lbl, url_lbl, meta]:
             widget.bind("<Enter>", on_enter)
             widget.bind("<Leave>", on_leave)
+
+    # ── Config 保存 / 読み込み ────────────────────────────────────────────────
+    def _save_config(self):
+        """
+        入力値を config.json に保存する。
+        ※ セキュリティのため API キー / GitHub Token は保存しない。
+        """
+        situation = self._get_text_value(
+            self.situation_text,
+            "e.g. 5 years Python backend engineer, currently job hunting")
+        hope = self._get_text_value(
+            self.hope_text,
+            "e.g. Remote Python/Go job in Tokyo, 700万円+, startup preferred")
+
+        # keywords_var のプレースホルダーを除外
+        kw = self.keywords_var.get().strip()
+        placeholder_kw = "Python, バックエンド, リモート  ← leave blank for AI"
+        if kw == placeholder_kw:
+            kw = ""
+
+        data = {
+            "resume_path": self.resume_path.get(),
+            "situation":   situation,
+            "hope":        hope,
+            "keywords":    kw,
+            "pages":       self.pages_var.get(),
+            "top":         self.top_var.get(),
+        }
+        try:
+            CONFIG_PATH.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            print(f"[config] 保存エラー: {e}")
+
+    def _load_config(self):
+        """config.json から前回の入力値を復元する。"""
+        if not CONFIG_PATH.exists():
+            return
+        try:
+            data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return
+
+        # 履歴書パス
+        rp = data.get("resume_path", "")
+        if rp and Path(rp).exists():
+            self.resume_path.set(rp)
+            size = Path(rp).stat().st_size
+            self.resume_info.config(
+                text=f"  {Path(rp).name}  ·  {size//1024} KB  (前回の値を復元)",
+                fg=ACCENT,
+            )
+
+        # 状況テキスト
+        situation = data.get("situation", "")
+        if situation:
+            self.situation_text.delete("1.0", "end")
+            self.situation_text.insert("1.0", situation)
+            self.situation_text.config(fg=TEXT)
+
+        # 希望テキスト
+        hope = data.get("hope", "")
+        if hope:
+            self.hope_text.delete("1.0", "end")
+            self.hope_text.insert("1.0", hope)
+            self.hope_text.config(fg=TEXT)
+
+        # キーワード
+        kw = data.get("keywords", "")
+        if kw:
+            self.keywords_var.set(kw)
+
+        # ページ数・件数
+        if "pages" in data:
+            self.pages_var.set(int(data["pages"]))
+        if "top" in data:
+            self.top_var.set(int(data["top"]))
+
+    def _on_close(self):
+        """ウィンドウを閉じるときに自動保存してから終了。"""
+        self._save_config()
+        self.destroy()
 
     # ── AI status indicator ───────────────────────────────────────────────────
     def _update_ai_status(self):
